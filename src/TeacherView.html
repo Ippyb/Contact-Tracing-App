@@ -1,0 +1,346 @@
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Teacher Interface</title>
+        <style>
+            .desk {
+                border: 3px solid black;
+                position: fixed;
+            }
+            #rotator {
+                background-color: #77ff99;
+                width: 18px;
+                height: 18px;
+                margin: auto;
+                margin-top: -11px;
+                border-radius: 9px;
+            }
+            #rotator:hover {
+                background-color: #66ee88;
+            }
+            #mover {
+                background-color: #3399ff;
+                width: 18px;
+                height: 18px;
+                margin: auto;
+                margin-top: 50%;
+                border-radius: 9px;
+                transform: translate(0%, -50%);
+            }
+            #mover:hover {
+                background-color: #2588ee;
+            }
+            .desk:hover {
+                background-color: #ddd;
+            }
+            .seldesk {
+                background-color: #ffc;
+            }
+            .seldesk:hover {
+                background-color: #eeb;
+            }
+            .desk p {
+                display: none;
+            }
+
+            #overlay {
+                position: fixed;
+                width: 100%;
+                height: 100%;
+                top: 0px;
+                left: 0px;
+                pointer-events: none;
+            }
+            .button {
+                padding: 5px;
+                background-color: #ccced3;
+                border-radius: 5px;
+            }
+            .button:hover {
+                background-color: #c0c3c7;
+            }
+            #ugh {
+                bottom: 0px;
+                position: absolute;
+                padding: 5px;
+            }
+            .footer {
+                display: flex;
+            }
+            #modeT {
+                display: flex;
+            }
+            #modeT div {
+                padding: 5px;
+                border-radius: 5px;
+            }
+            .selected {
+                background-color: #a0a3a6;
+            }
+            .hcontainer {
+                display: flex;
+            }
+            .hcontainer .button {
+                margin-left: 5px;
+                height: 30px;
+                width: 30px;
+                border-radius: 100%;
+                text-align: center;
+            }
+            #scaleContainer {
+                padding-left: 10px;
+                align-items: center;
+            }
+            #scale {
+                border: 3px solid black;
+                width: 10px;
+                height: 0px;
+                margin-left: 5px;
+            }
+            .reclickable {
+                pointer-events: auto;
+            }
+            #edittools {
+                padding: 5px;
+                display: none;
+            }
+            #edittools div {
+                padding: 5px;
+            }
+            #dconfigure {
+                margin-left: 5px;
+                height: 30px;
+                width: 30px;
+                border-radius: 100%;
+                text-align: center;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="layout"></div>
+        <div id="overlay">
+            <div id="edittools">
+                <div id="dtools" class="footer reclickable">
+                    <div id="dadd" class="button" onclick="armAdd()">
+                        <div id="daInd">Add Desk (n)</div>
+                    </div>
+                    <div id="dconfigure" class="button" onclick="dsFormat()">S</div>
+                </div>
+            </div>
+            <div id="ugh">
+                <div class="footer" id="scaleContainer">
+                    <p>6ft:</p>
+                    <div id="scale"></div>
+                </div>
+                <div class="footer reclickable">
+                    <div class="button" id="modeT" onclick="modeT()">
+                        <div class="toggleB selected" id="fill">Set Students</div>
+                        <div class="toggleB" id="set">Edit Layout</div>
+                    </div>
+                    <div class="hcontainer" id="zoomContainer">
+                        <div class="button" onclick="zoom(1.2)">+</div>
+                        <div class="button" onclick="zoom(1/1.2)">–</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    <script>
+        var z = 20;
+        var deskW = 2.5;
+        var deskH = 4;
+        var desks = [];
+        var mode = 0;
+        var cx = 0;
+        var cy = 0;
+        var addArmed = false;
+        var mx;
+        var my;
+        var ox;
+        var oy;
+        var dragV = 0;
+        var sel = -1;
+        var od;
+        function r(a) {
+            return a / z;
+        }
+        document.getElementById('scale').style.width = 6 * z;
+        function exportAll() {
+            return JSON.stringify(desks)
+                .replace(/,?\[\"deleted\"\]/g, '')
+                .replace('[,[', '[[');
+        }
+        function exportLayout() {
+            return exportAll().replace(/,"[^"]*"/g, '');
+        }
+        function importAll(a) {
+            desks = [];
+            sel = -1;
+            b = JSON.parse(a);
+            document.getElementById('layout').innerHTML = '';
+            for (var i = 0; i < b.length; i++) addDesk(b[i][0] * z - cx, b[i][1] * z - cy, b[i][2], b[i][3], b[i][4], b[i].length > 5 ? b[i][5] : '');
+        }
+        function modeT() {
+            console.log(mode == 1 ? 'fill' : 'set');
+            document.getElementById(mode == 0 ? 'fill' : 'set').className = 'toggleB';
+            document.getElementById(mode == 1 ? 'fill' : 'set').className = 'toggleB selected';
+            mode = (mode + 1) % 2;
+            document.getElementById('edittools').style.display = mode == 1 ? 'block' : 'none';
+            if (mode == 0) importAll(exportAll());
+        }
+        function generateGrid(nx, ny, dx, dy) {
+            var s = '[';
+            for (var i = 0; i < nx; i++)
+                for (var j = 0; j < ny; j++) s += ',[' + i * (dx + deskW) + ',' + j * (dy + deskH) + ',' + deskW + ',' + deskH + ',0]';
+            return s.replace('[,', '[') + ']';
+        }
+        function armAdd() {
+            addArmed = !addArmed;
+            document.getElementById('daInd').className = addArmed ? 'selected' : '';
+        }
+        function dsFormat() {
+            var c = ('' + prompt('Enter a desk size in terms of Length x Width feet (ex: 4x2.5)')).match(/[\d.]+/g);
+            if (c == null || c.length != 2) {
+                alert('input error');
+                return;
+            }
+            deskH = parseFloat(c[0]);
+            deskW = parseFloat(c[1]);
+        }
+
+        function populate(a) {
+            b = document.getElementById('desk' + a);
+            var student = prompt('Enter student name:' + (desks[a][5] == '' ? '' : '\n(currently: ' + b.innerHTML.match(/(?<=<p>)[^<]*/)[0] + ')'));
+            if (student == null) return;
+            desks[a][5] = student;
+            if (!b.className.match('seldesk')) b.className += ' seldesk';
+            b.innerHTML = b.innerHTML.replace(/(?<=<p>)[^<]*/, student);
+        }
+        function addDesk(x, y, w, h, r, d) {
+            //x and y are screen coordinates, not actual coordinates
+            var n = desks.length;
+            document.getElementById('layout').innerHTML +=
+                "<div class='desk" + (d == '' ? '' : ' seldesk') + "' id='desk" + n + "'><p>" + d + '</p></desk>';
+            var a = document.getElementById('desk' + n);
+            a.style.top = y - (h * z) / 2 + 'px';
+            a.style.left = x - (w * z) / 2 + 'px';
+            a.style.width = w * z + 'px';
+            a.style.height = h * z + 'px';
+            a.style.transform = 'rotate(' + r + 'deg)';
+            desks.push([(cx + x) / z, (cy + y) / z, w, h, r, d]);
+        }
+        function pan(dx, dy) {
+            cx -= dx;
+            cy -= dy;
+            var l = document.getElementsByClassName('desk');
+            for (var i = 0; i < l.length; i++) {
+                l[i].style.top = parseFloat(l[i].style.top.match(/-?[\d.]+/, 'g')[0]) + dy + 'px';
+                l[i].style.left = parseFloat(l[i].style.left.match(/-?[\d.]+/, 'g')[0]) + dx + 'px';
+            }
+            ox = mx;
+            oy = my;
+        }
+        function zoom(zi) {
+            //hw and hh define the point of screen zoomed out around.
+            //I set to center, for scroll wheel implimentation, set to cursor position
+            var hw = window.innerWidth / 2;
+            var hh = window.innerHeight / 2;
+            var l = document.getElementsByClassName('desk');
+            for (var i = 0; i < l.length; i++) {
+                l[i].style.top = zi * (parseFloat(l[i].style.top.match(/-?[\d.]+/, 'g')[0]) - hh) + hh + 'px';
+                l[i].style.left = zi * (parseFloat(l[i].style.left.match(/-?[\d.]+/, 'g')[0]) - hw) + hw + 'px';
+                l[i].style.width = zi * parseFloat(l[i].style.width.match(/-?[\d.]+/, 'g')[0]) + 'px';
+                l[i].style.height = zi * parseFloat(l[i].style.height.match(/-?[\d.]+/, 'g')[0]) + 'px';
+            }
+            z *= zi;
+            cx = zi * (cx + hw) - hw;
+            cy = zi * (cy + hh) - hh;
+            document.getElementById('scale').style.width = 6 * z;
+        }
+
+        function dSel() {
+            document.getElementById('rotator').remove();
+            document.getElementById('mover').remove();
+            document.getElementById('desk' + sel).style.border = '3px solid black';
+            sel = -1;
+        }
+        function setSel(i) {
+            if (sel != -1) dSel();
+            document.getElementById('desk' + i).innerHTML += "<div id='rotator'></div><div id='mover'></div>";
+            document.getElementById('desk' + i).style.border = '3px solid blue';
+            sel = i;
+        }
+        function selatan() {
+            a = document.getElementById('desk' + sel);
+            x = mx - parseInt(a.style.left) - parseInt(a.style.width) / 2 + 0.01;
+            y = parseInt(a.style.top) + parseInt(a.style.height) / 2 + 0.01 - my;
+            return (180 * Math.atan(y / x)) / Math.PI - (x > 0 ? 0 : 180);
+        }
+        function selmove() {
+            l = document.getElementById('desk' + sel);
+            l.style.top = parseFloat(l.style.top.match(/-?[\d.]+/, 'g')[0]) + (my - oy) + 'px';
+            l.style.left = parseFloat(l.style.left.match(/-?[\d.]+/, 'g')[0]) + (mx - ox) + 'px';
+            desks[sel][0] += (mx - ox) / z;
+            desks[sel][1] += (my - oy) / z;
+            ox = mx;
+            oy = my;
+        }
+
+        window.addEventListener('mousedown', (e) => {
+            //console.log(e.target.id);
+            if (mode == 1) {
+                //yes, I could have used a few less lines by integrating the two modes together
+                //however, it's 1:30 and I don't want to change stuff, so I shoved it into this if
+                if (e.target.id.match(/desk/, '')) {
+                    if (sel != e.target.id.match(/\d+/, '')[0]) setSel(e.target.id.match(/\d+/, '')[0]);
+                    dragV = 2;
+                } else if (e.target.id == 'rotator') {
+                    od = parseFloat(document.getElementById('desk' + sel).style.transform.match(/[\d.]+/, '')[0]) + selatan();
+                    dragV = 3;
+                } else if (e.target.id == 'mover') {
+                    dragV = 4;
+                } else {
+                    if (addArmed) {
+                        addDesk(mx, my, deskW, deskH, 0, '');
+                        dragV = 2;
+                        armAdd();
+                    }
+                    if (sel != -1) {
+                        dSel();
+                    }
+                }
+            } else if (e.target.id.match(/desk/, '')) {
+                populate(parseInt(e.target.id.match(/\d+/, '')[0]));
+                dragV = 2;
+            }
+
+            ox = e.clientX;
+            oy = e.clientY;
+            dragV = dragV == 0 ? 1 : dragV;
+        });
+        window.addEventListener('mousemove', (e) => {
+            mx = e.clientX;
+            my = e.clientY;
+            if (dragV == 1) pan(e.clientX - ox, e.clientY - oy);
+            if (dragV == 3) {
+                document.getElementById('desk' + sel).style.transform = 'rotate(' + (od - selatan()) + 'deg)';
+                desks[sel][4] = od - selatan();
+            }
+            if (dragV == 4) selmove();
+        });
+        window.addEventListener('mouseup', (e) => {
+            dragV = 0;
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.key == 'n' && mode == 1) addDesk(mx, my, deskW, deskH, 0, '');
+            if ((e.key == 'Backspace' || e.key == 'Delete') && sel != -1 && mode == 1) {
+                document.getElementById('desk' + sel).remove();
+                desks[sel] = ['deleted'];
+                sel = -1;
+            }
+        });
+    </script>
+</html>
